@@ -15,7 +15,7 @@ function [results, options] = RANSAC(X, options)
 % INPUT:
 %
 % X                 = input data. The data id provided as a matrix that has
-%                     dimensions 2dxN where d is the data dimensionality
+%                     dimesnsions 2dxN where d is the data dimensionality
 %                     and N is the number of elements
 %
 % options           = structure containing the following fields:
@@ -52,10 +52,6 @@ function [results, options] = RANSAC(X, options)
 %                         Should be in the form of:
 %
 %                         [E T_noise_squared] = man_fun(Theta, X)
-%
-%   parameters          = a structure that is passed to all the estimation,
-%                         validation and error functions containing data to
-%                         be used by such functions (e.g. parameters.alpha)
 %
 %   mode                = algorithm flavour
 %                         'RANSAC'  -> Fischler & Bolles
@@ -109,7 +105,6 @@ function [results, options] = RANSAC(X, options)
 %                          - stabilization procedure (beta version)
 % 1.1.4         - 09/13/08 - Added validation functions
 % 1.1.5         - 09/13/08 - Added time in the results
-% 1.1.6         - 05/26/14 - Added parmeters support
 
 % REFERENCES:
 %
@@ -141,8 +136,8 @@ if ~isfield(options, 'stabilize')
     options.stabilize = false;
 end;
 
-if ~isfield(options, 'sigma') && ~isfield(options, 'T_noise_squared')
-    error('RANSACToolbox:optionError', 'Either the option field sigma or T_noise_squared must be specified by the user');
+if ~isfield(options, 'sigma')
+    error('RANSACToolbox:optionError', 'The option field sigma must be specified by the user');
 end;
 
 if ~isfield(options, 'est_fun')
@@ -159,10 +154,6 @@ end;
 
 if ~isfield(options, 'validateTheta_fun')
     options.validateTheta_fun = [];
-end;
-
-if ~isfield(options, 'parameters')
-    options.parameters = [];
 end;
 
 if ~isfield(options, 'ind_tabu')
@@ -227,11 +218,7 @@ end;
 tic;
 
 % get minimal subset size and model codimension
-if isempty(options.parameters)
-    [~, k] = feval(options.est_fun, [], []);
-else
-    [~, k] = feval(options.est_fun, [], [], options.parameters);
-end
+[dummy, k] = feval(options.est_fun, []);
 if (options.verbose)
     fprintf('\nMinimal sample set dimension = %d', k);
 end;
@@ -252,15 +239,11 @@ if (N < k)
     return;
 end
 
+% get the noise threshold via Chi squared distribution
+[dummy T_noise_squared d] = feval(options.man_fun, [], [], options.sigma, options.P_inlier);
+
 % calculate the probability for the inlier detection.
 if ~isfield(options, 'T_noise_squared')
-    % get the noise threshold via Chi squared distribution
-    if isempty(options.parameters)
-        [~, T_noise_squared, d] = feval(options.man_fun, [], [], options.sigma, options.P_inlier);
-    else
-        [~, T_noise_squared, d] = feval(options.man_fun, [], [], options.sigma, options.P_inlier, options.parameters);
-    end;
-
     options.T_noise_squared = T_noise_squared;
     if (options.verbose)
         fprintf('\nSquared noise threshold = %f, (assuming Gaussian noise, for sigma = %f)', T_noise_squared, options.sigma);
@@ -332,24 +315,20 @@ while (...
     % Hypothesize ---------------------------------------------------------
 
     % select MSS
-    if isempty(options.parameters)
-        [MSS, Theta] = get_minimal_sample_set(k, X, options.Ps, options.est_fun, options.validateMSS_fun, options.ind_tabu);
-    else
-        [MSS, Theta] = get_minimal_sample_set(k, X, options.Ps, options.est_fun, options.validateMSS_fun, options.ind_tabu, options.parameters);
-    end
+    [MSS Theta] = get_minimal_sample_set(k, X, options.Ps, options.est_fun, options.validateMSS_fun, options.ind_tabu);
 
     % validate the parameter vector Theta
-    if ~isempty(options.validateTheta_fun) && ~feval(options.validateTheta_fun, X, Theta, MSS, options.parameters)
+    if ~isempty(options.validateTheta_fun) && ~feval(options.validateTheta_fun, X, Theta, MSS)
         continue;
     end;
 
     % Test ----------------------------------------------------------------
 
     % find the CS
-    [E, CS] = get_consensus_set(X, Theta, T_noise_squared, options.man_fun, options.parameters);
+    [E, CS] = get_consensus_set(X, Theta, T_noise_squared, options.man_fun);
 
     % get the ranking of the CS
-    r = get_consensus_set_rank(CS, E, options.mode, T_noise_squared);
+    r = get_consensus_set_rank(CS, E, options.mode, T_noise_squared, options.sigma, d);
 
     % get the indices
     ind_CS = find(CS);
@@ -426,14 +405,9 @@ if (options.reestimate)
         fprintf('\nRestimating the parameter vector... ')
     end;
     
-    if isempty(options.parameters)
-        Theta_star = feval(options.est_fun, X(:, CS_star), []);
-    else
-        Theta_star = feval(options.est_fun, X(:, CS_star), [], options.parameters);
-    end;
-    
-    [E_star, CS_star] = get_consensus_set(X, Theta_star, T_noise_squared, options.man_fun, options.parameters);
-    r_star = get_consensus_set_rank(CS_star, E_star, options.mode, T_noise_squared);
+    Theta_star = feval(options.est_fun, X(:, CS_star));
+    [E_star, CS_star] = get_consensus_set(X, Theta_star, T_noise_squared, options.man_fun);
+    r_star = get_consensus_set_rank(CS_star, E_star, options.mode, T_noise_squared, options.sigma, d);
     
     if (options.verbose)
         fprintf('Done')

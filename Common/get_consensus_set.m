@@ -1,4 +1,4 @@
-function [E, CS] = get_consensus_set(X, Theta_hat, T_noise_squared, man_fun, parameters)
+function [E, CS] = get_consensus_set(X, Theta_hat, T_noise_squared, man_fun)
 
 % [E, CS] = get_consensus_set(X, Theta_hat, T_noise_squared, man_fun)
 %
@@ -19,7 +19,6 @@ function [E, CS] = get_consensus_set(X, Theta_hat, T_noise_squared, man_fun, par
 %                     be in the form of:
 %
 %                     Theta = man_fun(Theta, X)
-% parameters        = the function parameters
 %
 %
 % OUTPUT:
@@ -29,14 +28,9 @@ function [E, CS] = get_consensus_set(X, Theta_hat, T_noise_squared, man_fun, par
 % HISTORY:
 %
 % 1.0.0             - ??/??/06 - Initial version
-% 1.0.1             - 05/26/14 - Added support for the function parameters
 
 % calculate the errors over the entire data set
-if isempty(parameters)
-    E = feval(man_fun, Theta_hat, X, [], []);
-else
-    E = feval(man_fun, Theta_hat, X, [], [], parameters);
-end;
+E = feval(man_fun, Theta_hat, X, [], []);
 
 % find the points within the error threshold
 CS = (E <= T_noise_squared);

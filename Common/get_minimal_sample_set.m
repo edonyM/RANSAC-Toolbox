@@ -1,6 +1,6 @@
-function [s, Theta_hat] = get_minimal_sample_set(k, X, P_s, est_fun, validateMSS_fun, ind_tabu, parameters)
+function [s, Theta_hat] = get_minimal_sample_set(k, X, P_s, est_fun, validateMSS_fun, ind_tabu)
 
-% [s, Theta_hat] = get_minimal_sample_set(k, X, P_s, est_fun, validateMSS_fun, ind_tabu, parameters)
+% [s, Theta_hat] = get_minimal_sample_set(k, X, P_s, est_fun, validateMSS_fun, ind_tabu)
 %
 % DESC:
 % select the minimal sample set using different sampling strategies
@@ -24,7 +24,6 @@ function [s, Theta_hat] = get_minimal_sample_set(k, X, P_s, est_fun, validateMSS
 %                     flag = validateMSS_foo(X, s)
 %
 % ind_tabu          = indices of elements excluded from the sample set
-% parameters        = the parameters for the functions
 %
 % OUTPUT:
 % s                 = minimal sample set
@@ -41,7 +40,6 @@ function [s, Theta_hat] = get_minimal_sample_set(k, X, P_s, est_fun, validateMSS
 %                     Volpe
 % 1.0.5             - 06/21/09 - Added further check. Thanks to Chris
 %                     Volpe
-% 1.0.6             - 06/26/14 - Added parameters support
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Check input parameters
@@ -62,10 +60,6 @@ if nargin < 6
     ind_tabu = [];
 end
 
-if nargin < 7
-    parameters = [];
-end
-
 N = size(X, 2);
 
 % remove tabu elements (if any)
@@ -73,10 +67,10 @@ ind = 1:N;
 if ~isempty(ind_tabu)
     ind = ind(~ind_tabu);
     NN = length(ind);
-    
+
     % check if we are left with enough elements for finding a MSS
     if (NN < k)
-        
+
         error('RANSACToolbox:get_minimal_sample_set', ...
             'Too few input input elements after removing tabu elements');
     end;
@@ -88,12 +82,12 @@ global RANSAC_SEED_UPDATED;
 % if we have an estimation function then loop until the MSS actually
 % produces an estimate
 while true
-    
+
     % update the seed
     if ~isempty(RANSAC_SEED_UPDATED)
         RANSAC_SEED_UPDATED = RANSAC_SEED_UPDATED + 1;
     end;
-    
+
     % uniform sampling
     if isempty(P_s)
         % uniform sampling
@@ -102,38 +96,28 @@ while true
         % probabilistic sampling
         mask = get_rand_prob(k, P_s(ind), RANSAC_SEED_UPDATED);
     end;
-    
+
     s = ind(mask);
-    
+        
     % check if we are done
     if isempty(est_fun)
         Theta_hat = [];
         break;
     end;
     
-    if isempty(parameters)
-        % validate the MSS
-        if ~isempty(validateMSS_fun) && ~feval(validateMSS_fun, X, s)
-            continue;
-        end;
-        
-        % estimate the parameter and the residual error
-        Theta_hat = feval(est_fun, X, s);
-    else
-        % validate the MSS
-        if ~isempty(validateMSS_fun) && ~feval(validateMSS_fun, X, s, parameters)
-            continue;
-        end;
-        
-        % estimate the parameter and the residual error
-        Theta_hat = feval(est_fun, X, s, parameters);
+    % validate the MSS
+    if ~isempty(validateMSS_fun) && ~feval(validateMSS_fun, X, s)
+        continue;
     end;
-    
+
+    % estimate the parameter and the residual error
+    Theta_hat = feval(est_fun, X, s);
+
     % verify that the estimation produced something
     if ~isempty(Theta_hat)
         break;
     end;
-    
+
 end;
 
 return
