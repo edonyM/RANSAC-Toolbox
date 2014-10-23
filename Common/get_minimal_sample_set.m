@@ -1,4 +1,4 @@
-function [s, Theta_hat] = get_minimal_sample_set(k, X, P_s, est_fun, validateMSS_fun, ind_tabu)
+function [s, Theta_hat] = get_minimal_sample_set(k, X, P_s, est_fun, validateMSS_fun, ind_tabu, parameters)
 
 % [s, Theta_hat] = get_minimal_sample_set(k, X, P_s, est_fun, validateMSS_fun, ind_tabu)
 %
@@ -24,6 +24,7 @@ function [s, Theta_hat] = get_minimal_sample_set(k, X, P_s, est_fun, validateMSS
 %                     flag = validateMSS_foo(X, s)
 %
 % ind_tabu          = indices of elements excluded from the sample set
+% parameters        = the parameters for the functions
 %
 % OUTPUT:
 % s                 = minimal sample set
@@ -58,6 +59,9 @@ end
 
 if nargin < 6
     ind_tabu = [];
+end
+if nargin < 7
+    parameters = [];
 end
 
 N = size(X, 2);
@@ -106,13 +110,23 @@ while true
     end;
     
     % validate the MSS
-    if ~isempty(validateMSS_fun) && ~feval(validateMSS_fun, X, s)
-        continue;
+    if isempty(parameters)
+        % validate the MSS
+        if ~isempty(validateMSS_fun) && ~feval(validateMSS_fun, X, s)
+            continue;
+        end;
+        
+        % estimate the parameter and the residual error
+        Theta_hat = feval(est_fun, X, s);
+    else
+        % validate the MSS
+        if ~isempty(validateMSS_fun) && ~feval(validateMSS_fun, X, s, parameters)
+            continue;
+        end;
+        % estimate the parameter and the residual error
+        Theta_hat = feval(est_fun, X, s, parameters);
     end;
-
-    % estimate the parameter and the residual error
-    Theta_hat = feval(est_fun, X, s);
-
+    
     % verify that the estimation produced something
     if ~isempty(Theta_hat)
         break;
