@@ -53,6 +53,10 @@ function [results, options] = RANSAC(X, options)
 %
 %                         [E T_noise_squared] = man_fun(Theta, X)
 %
+%   parameters          = a structure that is passed to all the estimation,
+%                         validation and error functions containing data to
+%                         be used by such functions (e.g. parameters.alpha)
+
 %   mode                = algorithm flavour
 %                         'RANSAC'  -> Fischler & Bolles
 %                         'MSAC'    -> Torr & Zisserman
@@ -156,6 +160,10 @@ if ~isfield(options, 'validateTheta_fun')
     options.validateTheta_fun = [];
 end;
 
+if ~isfield(options, 'parameters')
+    options.parameters = [];
+end;
+
 if ~isfield(options, 'ind_tabu')
     options.ind_tabu = [];
 end;
@@ -218,7 +226,11 @@ end;
 tic;
 
 % get minimal subset size and model codimension
-[dummy, k] = feval(options.est_fun, []);
+if isempty(options.parameters)
+    [~, k] = feval(options.est_fun, [], []);
+else
+    [~, k] = feval(options.est_fun, [], [], options.parameters);
+end
 if (options.verbose)
     fprintf('\nMinimal sample set dimension = %d', k);
 end;
@@ -240,10 +252,17 @@ if (N < k)
 end
 
 % get the noise threshold via Chi squared distribution
-[dummy T_noise_squared d] = feval(options.man_fun, [], [], options.sigma, options.P_inlier);
+% [dummy T_noise_squared d] = feval(options.man_fun, [], [], options.sigma, options.P_inlier);
 
 % calculate the probability for the inlier detection.
 if ~isfield(options, 'T_noise_squared')
+    % get the noise threshold via Chi squared distribution
+    if isempty(options.parameters)
+        [~, T_noise_squared, d] = feval(options.man_fun, [], [], options.sigma, options.P_inlier);
+    else
+        [~, T_noise_squared, d] = feval(options.man_fun, [], [], options.sigma, options.P_inlier, options.parameters);
+    end;
+
     options.T_noise_squared = T_noise_squared;
     if (options.verbose)
         fprintf('\nSquared noise threshold = %f, (assuming Gaussian noise, for sigma = %f)', T_noise_squared, options.sigma);
@@ -255,6 +274,7 @@ else
         fprintf('\nSquared noise threshold = %f', T_noise_squared);
     end;
 end;
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Randomization
@@ -315,17 +335,21 @@ while (...
     % Hypothesize ---------------------------------------------------------
 
     % select MSS
-    [MSS Theta] = get_minimal_sample_set(k, X, options.Ps, options.est_fun, options.validateMSS_fun, options.ind_tabu);
+    if isempty(options.parameters)
+        [MSS, Theta] = get_minimal_sample_set(k, X, options.Ps, options.est_fun, options.validateMSS_fun, options.ind_tabu);
+    else
+        [MSS, Theta] = get_minimal_sample_set(k, X, options.Ps, options.est_fun, options.validateMSS_fun, options.ind_tabu, options.parameters);
+    end
 
     % validate the parameter vector Theta
-    if ~isempty(options.validateTheta_fun) && ~feval(options.validateTheta_fun, X, Theta, MSS)
+    if ~isempty(options.validateTheta_fun) && ~feval(options.validateTheta_fun, X, Theta, MSS, options.parameters)
         continue;
     end;
 
     % Test ----------------------------------------------------------------
 
     % find the CS
-    [E, CS] = get_consensus_set(X, Theta, T_noise_squared, options.man_fun);
+    [E, CS] = get_consensus_set(X, Theta, T_noise_squared, options.man_fun, options.parameters);
 
     % get the ranking of the CS
     r = get_consensus_set_rank(CS, E, options.mode, T_noise_squared, options.sigma, d);
@@ -405,9 +429,14 @@ if (options.reestimate)
         fprintf('\nRestimating the parameter vector... ')
     end;
     
-    Theta_star = feval(options.est_fun, X(:, CS_star));
-    [E_star, CS_star] = get_consensus_set(X, Theta_star, T_noise_squared, options.man_fun);
-    r_star = get_consensus_set_rank(CS_star, E_star, options.mode, T_noise_squared, options.sigma, d);
+    if isempty(options.parameters)
+        Theta_star = feval(options.est_fun, X(:, CS_star), []);
+    else
+        Theta_star = feval(options.est_fun, X(:, CS_star), [], options.parameters);
+    end;
+    
+    [E_star, CS_star] = get_consensus_set(X, Theta_star, T_noise_squared, options.man_fun, options.parameters);
+    r_star = get_consensus_set_rank(CS_star, E_star, options.mode, T_noise_squared);
     
     if (options.verbose)
         fprintf('Done')
