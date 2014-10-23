@@ -72,6 +72,7 @@ end;
 
 dirs{nd} = '/Common';
 dirs{nd+1} = '/.';
+dirs{nd+2} = '/Data';
 
 for h = 1:numel(dirs)
     addpath(path, sprintf('%s%s', RANSAC_ROOT, dirs{h}));
